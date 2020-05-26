@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>列表</title>
+	<!-- <script type="text/javascript" src="https://code.jquery.com/jquery-3.4.1.min.js"></script> -->
+	<script type="text/javascript" src="__STATIC__/qqFace/js/jquery.min.js"></script>
+</head>
+<body>
+	<div class="list">
+		<div><a href="{:url('index')}?fromid=1&toid=2">小红:</a><span >123</span></div>
+	</div>
+
+	<script type="text/javascript">
+		var fromid = {$fromid};
+
+		var ws = new WebSocket("ws:127.0.0.1:8282")
+
+		ws.onmessage = function(e)
+		{
+			msg = eval('('+e.data+')')
+			console.log(msg)
+			switch(msg.type)
+			{
+				case 'init':
+					var bind = '{"type":"bind","fromid":"'+fromid+'"}'
+					ws.send(bind)
+					return
+
+				case 'text':
+					if (msg.toid == fromid)
+					{
+						$('.text'+msg.fromid).html(replace_em(msg.data))
+					}
+					return
+
+				case 'img':
+					if (msg.toid == fromid)
+					{
+						$('.text'+msg.fromid).html('{图片}')
+					}
+					return
+			}
+		}
+		//显示聊天用户列表
+		$(function(){
+			$.ajax({
+				url:'__ROOT__/api/chat/getList',
+				data:{id:fromid},
+				success:function(res){
+					console.log(res)
+					if (res.code == 1)
+					{
+						$.each(res.data,function(k,v)
+						{
+							if (v.last_msg.type == 2)
+							{
+								$('.list').append('<div>'+'<a href="{:url('index')}?fromid='+v.toid+'&toid='+v.fromid+'" target="_blank">'+v.fromname+'</a>:<span class="text'+v.fromid+'">{图片}</span></div>')
+							}else{
+								$('.list').append('<div>'+'<a href="{:url('index')}?fromid='+v.toid+'&toid='+v.fromid+'" target="_blank">'+v.fromname+'</a>:<span class="text'+v.fromid+'">'+replace_em(v.last_msg.content)+'</span></div>')
+							}
+						})
+					}
+				}
+			})
+		})
+
+		//表情
+		function replace_em(str)
+		{
+
+			str = str.replace(/\</g,'&lt;');
+
+			str = str.replace(/\>/g,'&gt;');
+
+			str = str.replace(/\n/g,'<br/>');
+
+			str = str.replace(/\[em_([0-9]*)\]/g,'<img src="__STATIC__/qqFace/arclist/$1.gif" border="0" />');
+
+			return str;
+
+		}
+	</script>
+</body>
+</html>

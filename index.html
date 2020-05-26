@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<title>chat</title>
+	<!-- <script type="text/javascript" src="https://code.jquery.com/jquery-3.4.1.min.js"></script> -->
+	<script type="text/javascript" src="__STATIC__/qqFace/js/jquery.min.js"></script>
+	<script type="text/javascript" src="__STATIC__/qqFace/js/jquery.qqFace.js"></script>
+</head>
+	<style type="text/css">
+		.up{
+			margin-bottom: 10px;
+		}
+		.chat-content{
+			height: 300px;
+			overflow-y:scroll;
+		}
+		.chat-content div{
+			margin-bottom: 10px;
+		}
+		.line{
+			margin-left: 20px;
+			color: red;
+		}
+		.qqFace { margin-top: 4px; background: #fff; padding: 2px; border: 1px #dfe6f6 solid; }
+		.qqFace table td { padding: 0px; }
+		.qqFace table td img { cursor: pointer; border: 1px #fff solid; }
+		.qqFace table td img:hover { border: 1px #0066cc solid; }
+	</style>
+<body>
+	<div class="up">
+		<span class="title">聊天中</span>
+		<span class="line">在线</span>
+	</div>
+	
+	<div class="chat-content">
+		<div></div>
+	</div>
+
+	<div class="oper">
+		<input type="button" class="emoji" value="表情" >
+		<input class="send-input" maxlength="200" id="saytext">
+		<input type="button" id='sub' value="发送">
+		<input type="button" id='img' value="图片">
+		<input type="file" id='file' accept="image" style="display: none;">
+		
+	</div>
+	
+
+	<script type="text/javascript">
+	//一对一聊天,后期请替换为用户的业务ID
+	var fromid = {$fromid};
+	var toid = {$toid};
+	var fromname = ''
+	var toname = ''
+	// var api_url = "api/chat/save_msg"
+	var line = 0
+	var ws = new WebSocket("ws:127.0.0.1:8282")
+
+	//接收消息
+	ws.onmessage = function(e)
+	{
+		msg = eval('('+e.data+')')
+		console.log(msg)
+		switch(msg.type){
+			case 'init':
+				var bind = '{"type":"bind","fromid":"'+fromid+'","toid":"'+toid+'"}'
+				ws.send(bind)
+				get_user_name()
+				msg_load()
+				var online = '{"type":"online","fromid":"'+fromid+'","toid":"'+toid+'"}'
+				ws.send(online)
+				change_read()
+				return
+			case 'online':
+				if (msg.toid == toid) {
+					line = msg.data
+					if (msg.data == 1) {
+						$('.line').html('在线')
+					}else{
+						$('.line').html('离线')
+					}
+					
+				}
+				return
+			case 'onclose':
+				if (msg.toid == toid) {
+					line = msg.data
+					$('.line').html('离线')
+				}
+				return
+			case 'text':
+				if (toid == msg.fromid) {
+					$('.chat-content').append('<div>'+toname+':'+replace_em(msg.data)+'</div>')
+					$('.chat-content').scrollTop($(".chat-content").prop("scrollHeight"));
+				}
+				change_read()
+				return
+			case 'img':
+				if (toid == msg.fromid) {
+					$('.chat-content').append('<div>'+toname+':<img width="120px" height="120px" src="__ROOT__/uploads/'+msg.data+'"></div>')
+					$('.chat-content').scrollTop($(".chat-content").prop("scrollHeight"));
+				}
+				change_read()
+				return
+			case 'save':
+				save_msg(msg)
+				return
+		}	
+	}
+
+	//发送消息
+	$('#sub').click(function()
+	{
+		var text = $('.send-input').val()
+		if (text == '') {
+			return
+		}
+		//为了支持发送图片语音文本组装成json格式
+		var message = '{"data":"'+text+'","type":"say","fromid":"'+fromid+'","toid":"'+toid+'"}'
+		ws.send(message)
+		$('.chat-content').append('<div>我:'+replace_em(text)+'</div>')
+		$('.chat-content').scrollTop($(".chat-content").prop("scrollHeight"));
+		$('.send-input').val("")
+	})
+
+	//保存消息
+	function save_msg(data)
+	{
+		$.ajax({
+			url:'__ROOT__/api/chat/saveMsg',
+			data:data,
+			type:'POST',
+			success:function(res){
+				console.log(res)
+			}
+		})
+	}
+
+	//获取用户名
+	function get_user_name()
+	{
+		$.ajax({
+			url:'__ROOT__/api/chat/getBothName',
+			data:{fromid:fromid,toid:toid},
+			type:'POST',
+			success:function(res){
+				fromname = res.fromname
+				toname = res.toname
+				$('.title').html('与'+toname+'聊天中...')
+			}
+		})
+	}
+
+	//获取聊天记录
+	function msg_load()
+	{
+		$.ajax({
+			url:'__ROOT__/api/chat/getMsg',
+			data:{fromid:fromid,toid:toid},
+			type:'POST',
+			success:function(res){
+				console.log(res)
+				if (res.code) {
+					$.each(res.data,function(k,v){
+						if (v.toid==toid) {
+							
+							if (v.type == 1) {
+								$('.chat-content').append('<div>'+toname+':'+replace_em(v.content)+'</div>')
+							} else if (v.type == 2) {
+								$('.chat-content').append('<div>'+toname+':<img width="120px" height="120px" src="__ROOT__/uploads/'+v.content+'"></div>')
+							}
+						}else{
+							if (v.type == 1) {
+								$('.chat-content').append('<div>我:'+replace_em(v.content)+'</div>')
+							} else if (v.type == 2) {
+								$('.chat-content').append('<div>我:<img width="120px" height="120px" src="__ROOT__/uploads/'+v.content+'"></div>')
+							}
+							
+						}
+						$('.chat-content').scrollTop($(".chat-content").prop("scrollHeight"));
+					})
+				}else{
+					alert(res.msg)
+				}
+			}
+		})
+	}
+
+	//发送图片
+	$('#img').click(function(){
+		$('#file').click()
+	})
+
+	$('#file').change(function(){
+		formdata = new FormData()
+		formdata.append('fromid',fromid)
+		formdata.append('toid',toid)
+		formdata.append('online',line)
+		formdata.append('file',$('#file')[0].files[0])
+
+		$.ajax({
+			url:'__ROOT__/api/chat/uploadImg',
+			type:'POST',
+			cache:false,
+			data:formdata,
+			dataType:'json',
+			processData:false,
+			contentType:false,
+			success:function(res){
+				console.log(res)
+				if (!res.code) {
+					alert(res.msg)
+				}else{
+					$('#file').val('')
+					$('.chat-content').append('<div>我:<img width="120px" height="120px" src="__ROOT__/uploads/'+res.data+'"></div>')
+					$('.chat-content').scrollTop($(".chat-content").prop("scrollHeight"));
+
+					var message = '{"data":"'+res.data+'","type":"img","fromid":"'+fromid+'","toid":"'+toid+'"}'
+					ws.send(message)
+				}
+			}
+		})
+	})
+
+	//表情
+	$(function(){
+
+		$('.emoji').qqFace({ 
+
+			assign:'saytext', 
+
+			path:'__STATIC__/qqFace/arclist/'	//表情存放的路径
+
+		});
+
+		$(".sub_btn").click(function(){
+
+			var str = $("#saytext").val();
+
+			$("#show").html(replace_em(str));
+
+		});
+
+	});
+
+	//查看结果
+
+	function replace_em(str)
+	{
+
+		str = str.replace(/\</g,'&lt;');
+
+		str = str.replace(/\>/g,'&gt;');
+
+		str = str.replace(/\n/g,'<br/>');
+
+		str = str.replace(/\[em_([0-9]*)\]/g,'<img src="__STATIC__/qqFace/arclist/$1.gif" border="0" />');
+
+		return str;
+
+	}
+
+	//更改未读消息为已读
+	function change_read()
+	{
+		$.ajax({
+			url:'__ROOT__/api/chat/changeReadMsg',
+			data:{fromid:fromid,toid:toid},
+			type:'POST',
+			success:function(res){
+				console.log(res)
+			}
+		})
+	}
+	
+	</script>
+</body>
+</html>
